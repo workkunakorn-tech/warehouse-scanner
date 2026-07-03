@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบสแกน QR Code คลังสินค้าความเร็วสูงสไตล์แอป LINE</title>
-    <!-- เรียกใช้งานสคริปต์สแกนโค้ด -->
+    <title>ระบบสแกนคลังสินค้า Ultra Speed (ไม่ต้องรอเน็ต)</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; margin: 0; padding: 20px; background-color: #f0f2f5; }
@@ -15,26 +14,18 @@
         label { display: block; font-weight: bold; margin-bottom: 5px; color: #475569; }
         input[type="text"] { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
         .btn { width: 100%; padding: 12px; background-color: #2563eb; color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; }
-        .btn:hover { background-color: #1d4ed8; }
         .btn-logout { background-color: #dc2626; padding: 6px 12px; font-size: 0.85rem; width: auto; margin-top: 10px; border: none; border-radius: 4px; color: white; cursor: pointer; }
 
-        /* กรอบกล้องสแกนสี่เหลี่ยมจัตุรัสแบบแอป LINE */
         #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 15px; background: #000; min-height: 280px; border: 2px solid #cbd5e1; }
         .user-info { background-color: #f8fafc; padding: 10px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #2563eb; text-align: left; }
 
-        /* สไตล์ของ Status Popup Modal เน้นจบงานไว */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; }
-        .modal-box { width: 80%; max-width: 360px; padding: 25px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: popupIn 0.1s ease-out; }
-        
-        /* สีสถานะเด่นๆ มองง่าย ไม่รบกวนสายตา */
-        .pop-success { background: #10b981; color: white; }
-        .pop-warning { background: #f59e0b; color: white; }
-        .pop-error { background: #ef4444; color: white; }
-        
+        /* Status Popup เน้นแสดงผลและสลายตัวทันที */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 9999; justify-content: center; align-items: center; }
+        .modal-box { width: 80%; max-width: 360px; padding: 25px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: popupIn 0.08s ease-out; background: #10b981; color: white; }
         .modal-title { font-size: 1.8rem; font-weight: bold; margin: 0; }
 
         @keyframes popupIn {
-            0% { transform: scale(0.9); opacity: 0; }
+            0% { transform: scale(0.95); opacity: 0; }
             100% { transform: scale(1); opacity: 1; }
         }
     </style>
@@ -42,7 +33,6 @@
 <body>
 
 <div class="container">
-    <!-- ส่วนที่ 1: ลงชื่อเข้าใช้ -->
     <div id="login-section">
         <h2>🔑 ลงชื่อเข้าใช้งานระบบคลัง</h2>
         <div class="form-group">
@@ -52,7 +42,6 @@
         <button class="btn" onclick="login()">เข้าสู่ระบบเพื่อสแกน</button>
     </div>
 
-    <!-- ส่วนที่ 2: เครื่องสแกนสไตล์แอป LINE (QR CODE ONLY) -->
     <div id="scanner-section" style="display: none;">
         <h2>📥 สแกนรับเข้าคลังสินค้า</h2>
         <div class="user-info">
@@ -64,74 +53,45 @@
     </div>
 </div>
 
-<!-- ส่วนที่ 3: หน้าต่าง Popup แสดงสถานะแบบสั้นพิเศษ -->
 <div id="statusModal" class="modal-overlay">
     <div id="modalBox" class="modal-box">
-        <div id="modalTitle" class="modal-title"></div>
+        <div id="modalTitle" class="modal-title">📥 รับเข้าสำเร็จ</div>
     </div>
 </div>
 
 <script>
-    // 🔗 ลิงก์ Web App URL จาก Google Sheets ของคุณ
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwt7iaA9IohvJOR8ajOoKfMOR3fuInY4LJVjCAOUW322fIW4ZIWo_YKBcZ6It_lw0gz/exec"; 
 
     let html5Qrcode = null;
     let isProcessing = false;
 
     // ระบบเสียงปี๊บความเร็วสูง
-    function playBeep(type) {
+    function playBeep() {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
             gain.connect(ctx.destination);
-
-            if (type === 'success') {
-                osc.frequency.setValueAtTime(1050, ctx.currentTime); 
-                gain.gain.setValueAtTime(0.15, ctx.currentTime);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.06);
-            } else {
-                osc.frequency.setValueAtTime(220, ctx.currentTime); 
-                gain.gain.setValueAtTime(0.2, ctx.currentTime);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.25);
-            }
+            osc.frequency.setValueAtTime(1050, ctx.currentTime); 
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.06);
         } catch (e) { console.log("Audio error"); }
     }
 
-    // ระบบแสดง Popup และควบคุมการเคลียร์หน้าจอเพื่อเริ่มงานใหม่
-    function showPopup(status, text) {
+    // แสดงป๊อปอัพความเร็วสูงและเคลียร์ตัวเองใน 0.5 วินาที
+    function triggerSuccess() {
         const modal = document.getElementById('statusModal');
-        const box = document.getElementById('modalBox');
-        const t = document.getElementById('modalTitle');
-
-        box.className = 'modal-box'; 
-        if (status === 'success') {
-            box.classList.add('pop-success');
-            playBeep('success');
-        } else if (status === 'warning') {
-            box.classList.add('pop-warning');
-            playBeep('error');
-        } else {
-            box.classList.add('pop-error');
-            playBeep('error');
-        }
-
-        t.innerText = text;
         modal.style.display = 'flex';
+        playBeep();
 
-        // ⏱️ เคลียร์หน้าต่างไวมากภายใน 0.8 วินาที และปลดล็อกกล้องให้ทำงานต่อ
+        // ⏱️ เพียง 500 มิลลิวินาที ป๊อปอัพจะหายไปและเปิดกล้องรับชิ้นต่อไปทันที
         setTimeout(() => {
             modal.style.display = 'none';
             isProcessing = false; 
-            
-            // 🔄 ปลดล็อกให้กล้องกลับมาจับภาพต่อทันทีแบบ Real-time
-            if (html5Qrcode) {
-                html5Qrcode.resume();
-            }
-        }, 800);
+            if (html5Qrcode) { html5Qrcode.resume(); }
+        }, 500);
     }
 
     window.onload = function() {
@@ -181,9 +141,7 @@
                     width: { min: 640, ideal: 1280 },
                     height: { min: 480, ideal: 720 }
                 },
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true 
-                }
+                experimentalFeatures: { useBarCodeDetectorIfSupported: true }
             },
             onScanSuccess,
             (error) => {}
@@ -196,29 +154,21 @@
         if (isProcessing) return;
         isProcessing = true; 
 
-        // 🔥 [เพิ่มใหม่] สั่งล็อกภาพบนหน้าจอทันที (Freeze) เมื่อสแกนติด เพื่อความชัวร์และรวดเร็ว
+        // 1. ล็อกภาพบนหน้าจอทันทีเมื่อจับเจอ QR Code
         if (html5Qrcode && html5Qrcode.isScanning) {
             html5Qrcode.pause(true); 
         }
 
-        const currentUser = localStorage.getItem("operator_name");
+        // 2. แสดงหน้าต่างสำเร็จ + ส่งเสียงปี๊บทันที (ไม่ต้องรอเน็ตตอบกลับ)
+        triggerSuccess();
 
+        // 3. แอบส่งข้อมูลไปบันทึกใน Google Sheets ด้านหลังบ้านแบบเงียบๆ (Background Fetch)
+        const currentUser = localStorage.getItem("operator_name");
         fetch(GOOGLE_SCRIPT_URL, {
             method: "POST",
             body: JSON.stringify({ uniqueNo: decodedText, operator: currentUser })
-        })
-        .then(res => res.json())
-        .then(response => {
-            if (response.status === "success") {
-                showPopup('success', '📥 รับเข้าสำเร็จ'); 
-            } else if (response.status === "warning") {
-                showPopup('warning', '⚠️ ข้อมูลซ้ำ/มีปัญหา');
-            } else {
-                showPopup('error', '❌ ไม่สำเร็จ');
-            }
-        })
-        .catch(err => {
-            showPopup('error', '🔌 เน็ตหลุด');
+        }).catch(err => {
+            console.log("Background upload failed but workflow skipped blocking");
         });
     }
 </script>
