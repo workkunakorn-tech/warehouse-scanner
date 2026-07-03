@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบสแกนรับเข้าสินค้าแบบระบุตัวตน</title>
+    <!-- เรียกใช้งานสคริปต์สแกนโค้ด -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; margin: 0; padding: 20px; background-color: #f0f2f5; }
         .container { max-width: 500px; margin: 30px auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         h2 { color: #1e293b; margin-bottom: 20px; }
         
-        /* สไตล์หน้า Login */
         .form-group { margin-bottom: 15px; text-align: left; }
         label { display: block; font-weight: bold; margin-bottom: 5px; color: #475569; }
         input[type="text"] { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
@@ -19,8 +19,8 @@
         .btn-logout { background-color: #dc2626; padding: 6px 12px; font-size: 0.85rem; width: auto; margin-top: 10px; }
         .btn-logout:hover { background-color: #b91c1c; }
 
-        /* สไตล์หน้าสแกน */
-        #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 15px; }
+        /* ปรับแต่งกรอบครอบกล้องให้แสดงผลสวยงาม ไม่มีปุ่มมารบกวน */
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 15px; background: #000; min-height: 250px; }
         #result { margin-top: 20px; font-size: 1.1rem; font-weight: bold; padding: 15px; border-radius: 8px; }
         .waiting { background-color: #e9ecef; color: #495057; }
         .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
@@ -32,6 +32,7 @@
 <body>
 
 <div class="container">
+    <!-- ส่วนที่ 1: ลงชื่อเข้าใช้ -->
     <div id="login-section">
         <h2>🔑 ลงชื่อเข้าใช้งานระบบคลัง</h2>
         <div class="form-group">
@@ -41,6 +42,7 @@
         <button class="btn" onclick="login()">เข้าสู่ระบบเพื่อสแกน</button>
     </div>
 
+    <!-- ส่วนที่ 2: เครื่องสแกน (เปิดกล้องทันที) -->
     <div id="scanner-section" style="display: none;">
         <h2>📥 สแกนยืนยันรับเข้าสินค้า</h2>
         <div class="user-info">
@@ -49,40 +51,39 @@
             <button class="btn btn-logout" onclick="logout()">ออกจากระบบ</button>
         </div>
         <div id="reader"></div>
-        <div id="result" class="waiting">📷 พร้อมสแกนบาร์โค้ด / QR Code...</div>
+        <div id="result" class="waiting">📷 กำลังเปิดกล้องหลังอัตโนมัติ...</div>
     </div>
 </div>
 
 <script>
-    // 🔗 นำ Web App URL ที่ได้จาก Google Apps Script มาวางที่นี่
-    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwPEBhNaOzpTjxJsYS9czDAucjva7FomtJTNwBJCZy_6qju1t2LvjYHWxhjL7TavquI/exec"; 
+    // 🔗 เปลี่ยนเป็น URL Web App ล่าสุดจาก Google Sheets ของคุณ
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzWQRXUAIKG8MaJvD4e-XwAZGcahLkrbc-Gnvn96PLQLOrlX_RBvAgQe8MElrbfbWBs/exec"; 
 
-    let html5QrcodeScanner = null;
+    let html5Qrcode = null;
     let isProcessing = false;
 
-    // ตรวจสอบตอนเปิดเว็บว่าเคยล็อกอินค้างไว้ไหม
     window.onload = function() {
         const savedUser = localStorage.getItem("operator_name");
-        if (savedUser) {
-            showScanner(savedUser);
-        }
+        if (savedUser) { showScanner(savedUser); }
     }
 
     function login() {
         const username = document.getElementById("username").value.trim();
-        if (username === "") {
-            alert("กรุณากรอกชื่อพนักงานก่อนเข้าใช้งานครับ");
-            return;
-        }
-        localStorage.setItem("operator_name", username); // บันทึกชื่อลงเครื่อง
+        if (username === "") { alert("กรุณากรอกชื่อพนักงานก่อนเข้าใช้งานครับ"); return; }
+        localStorage.setItem("operator_name", username);
         showScanner(username);
     }
 
     function logout() {
-        if (html5QrcodeScanner) {
-            html5QrcodeScanner.clear(); // ปิดกล้อง
+        if (html5Qrcode && html5Qrcode.isScanning) {
+            html5Qrcode.stop().then(() => { proceedLogout(); }).catch(() => { proceedLogout(); });
+        } else {
+            proceedLogout();
         }
-        localStorage.removeItem("operator_name"); // ลบชื่อที่บันทึกไว้
+    }
+
+    function proceedLogout() {
+        localStorage.removeItem("operator_name");
         document.getElementById("login-section").style.display = "block";
         document.getElementById("scanner-section").style.display = "none";
         document.getElementById("username").value = "";
@@ -93,12 +94,22 @@
         document.getElementById("scanner-section").style.display = "block";
         document.getElementById("display-user").innerText = username;
         
-        // เปิดใช้งานกล้องสแกน
-        html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
-            fps: 15, 
-            qrbox: { width: 280, height: 160 } 
+        // ใช้คลาส Html5Qrcode ตรงๆ เพื่อควบคุมการเปิดกล้องแบบอัตโนมัติ
+        if (!html5Qrcode) { html5Qrcode = new Html5Qrcode("reader"); }
+        
+        // สั่งเปิดกล้องหลัง (environment) ทันทีโดยไม่ต้องกดปุ่ม
+        html5Qrcode.start(
+            { facingMode: "environment" }, 
+            { fps: 15, qrbox: { width: 280, height: 160 } },
+            onScanSuccess,
+            (errorMessage) => { /* ปล่อยว่างไว้เพื่อซ่อน log error ตอนขยับกล้อง */ }
+        ).then(() => {
+            document.getElementById('result').className = 'waiting';
+            document.getElementById('result').innerText = "📷 กล้องพร้อมทำงาน ส่องที่บาร์โค้ดได้เลย...";
+        }).catch(err => {
+            document.getElementById('result').className = 'error';
+            document.getElementById('result').innerText = "❌ ไม่สามารถเปิดกล้องอัตโนมัติได้ กรุณารีเฟรชหน้าเว็บและอนุญาตให้เข้าถึงกล้อง";
         });
-        html5QrcodeScanner.render(onScanSuccess);
     }
 
     function onScanSuccess(decodedText, decodedResult) {
@@ -111,23 +122,15 @@
 
         const currentUser = localStorage.getItem("operator_name");
 
-        // ส่งข้อมูลรหัสสินค้า คู่กับ ชื่อพนักงาน ไปที่ Google Sheets
         fetch(GOOGLE_SCRIPT_URL, {
             method: "POST",
-            body: JSON.stringify({ 
-                uniqueNo: decodedText,
-                operator: currentUser 
-            })
+            body: JSON.stringify({ uniqueNo: decodedText, operator: currentUser })
         })
         .then(res => res.json())
         .then(response => {
-            if (response.status === "success") {
-                resultDiv.className = 'success';
-            } else if (response.status === "warning") {
-                resultDiv.className = 'warning';
-            } else {
-                resultDiv.className = 'error';
-            }
+            if (response.status === "success") { resultDiv.className = 'success'; } 
+            else if (response.status === "warning") { resultDiv.className = 'warning'; } 
+            else { resultDiv.className = 'error'; }
             resultDiv.innerText = response.message;
             
             setTimeout(() => {
