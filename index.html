@@ -101,7 +101,7 @@
         } catch (e) { console.log("Audio error"); }
     }
 
-    // ระบบแสดง Popup "รับเข้าสำเร็จ" แบบสั้นกระชับ
+    // ระบบแสดง Popup และควบคุมการเคลียร์หน้าจอเพื่อเริ่มงานใหม่
     function showPopup(status, text) {
         const modal = document.getElementById('statusModal');
         const box = document.getElementById('modalBox');
@@ -122,10 +122,15 @@
         t.innerText = text;
         modal.style.display = 'flex';
 
-        // ⏱️ เคลียร์หน้าต่างไวมากภายใน 0.8 วินาที เพื่อให้ยิงกล่องต่อไปได้ทันที
+        // ⏱️ เคลียร์หน้าต่างไวมากภายใน 0.8 วินาที และปลดล็อกกล้องให้ทำงานต่อ
         setTimeout(() => {
             modal.style.display = 'none';
             isProcessing = false; 
+            
+            // 🔄 ปลดล็อกให้กล้องกลับมาจับภาพต่อทันทีแบบ Real-time
+            if (html5Qrcode) {
+                html5Qrcode.resume();
+            }
         }, 800);
     }
 
@@ -164,14 +169,12 @@
         html5Qrcode.start(
             { facingMode: "environment" }, 
             { 
-                fps: 25, // เร่งการดึงภาพสูงสุดเพื่อความลื่นไหล
+                fps: 25, 
                 qrbox: function(viewfinderWidth, viewfinderHeight) {
-                    // 📐 กลับมาเป็นสี่เหลี่ยมจัตุรัสแบบแอป LINE โฟกัสแม่นยำที่สุดสำหรับ QR Code
                     const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
                     const qrboxSize = Math.floor(minEdge * 0.68);
                     return { width: qrboxSize, height: qrboxSize };
                 },
-                // 🔒 ล็อกเป้าหมายให้รับและประมวลผลแค่ QR CODE อย่างเดียวตามบรีฟ
                 formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
                 videoConstraints: {
                     facingMode: "environment",
@@ -179,7 +182,7 @@
                     height: { min: 480, ideal: 720 }
                 },
                 experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true // ใช้ฮาร์ดแวร์ในมือถือช่วยให้อ่านไวขึ้นแบบแอป LINE
+                    useBarCodeDetectorIfSupported: true 
                 }
             },
             onScanSuccess,
@@ -191,7 +194,12 @@
 
     function onScanSuccess(decodedText, decodedResult) {
         if (isProcessing) return;
-        isProcessing = true; // ล็อกจังหวะการสแกนซ้ำซ้อน
+        isProcessing = true; 
+
+        // 🔥 [เพิ่มใหม่] สั่งล็อกภาพบนหน้าจอทันที (Freeze) เมื่อสแกนติด เพื่อความชัวร์และรวดเร็ว
+        if (html5Qrcode && html5Qrcode.isScanning) {
+            html5Qrcode.pause(true); 
+        }
 
         const currentUser = localStorage.getItem("operator_name");
 
@@ -202,7 +210,7 @@
         .then(res => res.json())
         .then(response => {
             if (response.status === "success") {
-                showPopup('success', '📥 รับเข้าสำเร็จ'); // แสดงเฉพาะข้อความสั้นๆ ตามต้องการ
+                showPopup('success', '📥 รับเข้าสำเร็จ'); 
             } else if (response.status === "warning") {
                 showPopup('warning', '⚠️ ข้อมูลซ้ำ/มีปัญหา');
             } else {
