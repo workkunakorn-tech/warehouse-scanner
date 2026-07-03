@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบสแกนรับเข้าสินค้าแบบระบุตัวตน</title>
+    <title>ระบบสแกน QR Code คลังสินค้าความเร็วสูง</title>
     <!-- เรียกใช้งานสคริปต์สแกนโค้ด -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; margin: 0; padding: 20px; background-color: #f0f2f5; }
-        .container { max-width: 500px; margin: 30px auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .container { max-width: 500px; margin: 20px auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         h2 { color: #1e293b; margin-bottom: 20px; }
         
         .form-group { margin-bottom: 15px; text-align: left; }
@@ -17,16 +17,28 @@
         .btn { width: 100%; padding: 12px; background-color: #2563eb; color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; }
         .btn:hover { background-color: #1d4ed8; }
         .btn-logout { background-color: #dc2626; padding: 6px 12px; font-size: 0.85rem; width: auto; margin-top: 10px; }
-        .btn-logout:hover { background-color: #b91c1c; }
 
-        /* ปรับแต่งกรอบครอบกล้องให้แสดงผลสวยงาม ไม่มีปุ่มมารบกวน */
-        #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 15px; background: #000; min-height: 250px; }
-        #result { margin-top: 20px; font-size: 1.1rem; font-weight: bold; padding: 15px; border-radius: 8px; }
-        .waiting { background-color: #e9ecef; color: #495057; }
-        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
-        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        /* กรอบกล้องสแกน */
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 15px; background: #000; min-height: 280px; }
         .user-info { background-color: #f8fafc; padding: 10px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #2563eb; text-align: left; }
+
+        /* สไตล์ของ Status Popup Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; justify-content: center; align-items: center; }
+        .modal-box { width: 85%; max-width: 400px; padding: 30px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: popupIn 0.2s ease-out; }
+        
+        /* สีของแต่ละสถานะ */
+        .pop-success { background: #ffffff; border-top: 10px solid #10b981; }
+        .pop-warning { background: #ffffff; border-top: 10px solid #f59e0b; }
+        .pop-error { background: #ffffff; border-top: 10px solid #ef4444; }
+        
+        .modal-icon { font-size: 4rem; margin-bottom: 10px; }
+        .modal-title { font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; color: #1e293b; }
+        .modal-msg { font-size: 1.1rem; color: #475569; margin-bottom: 15px; word-break: break-word; }
+
+        @keyframes popupIn {
+            0% { transform: scale(0.7); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -42,25 +54,90 @@
         <button class="btn" onclick="login()">เข้าสู่ระบบเพื่อสแกน</button>
     </div>
 
-    <!-- ส่วนที่ 2: เครื่องสแกน (เปิดกล้องทันที) -->
+    <!-- ส่วนที่ 2: เครื่องสแกน (QR Code Only) -->
     <div id="scanner-section" style="display: none;">
-        <h2>📥 สแกนยืนยันรับเข้าสินค้า</h2>
+        <h2>📥 สแกนรับเข้าคลัง (QR ONLY)</h2>
         <div class="user-info">
             <span>👤 ผู้ปฏิบัติงาน: <strong id="display-user"></strong></span>
             <br>
             <button class="btn btn-logout" onclick="logout()">ออกจากระบบ</button>
         </div>
         <div id="reader"></div>
-        <div id="result" class="waiting">📷 กำลังเปิดกล้องหลังอัตโนมัติ...</div>
+    </div>
+</div>
+
+<!-- ส่วนที่ 3: หน้าต่าง Popup แสดงสถานะ (Modal) -->
+<div id="statusModal" class="modal-overlay">
+    <div id="modalBox" class="modal-box">
+        <div id="modalIcon" class="modal-icon"></div>
+        <div id="modalTitle" class="modal-title"></div>
+        <div id="modalMsg" class="modal-msg"></div>
     </div>
 </div>
 
 <script>
-    // 🔗 เปลี่ยนเป็น URL Web App ล่าสุดจาก Google Sheets ของคุณ
+    // 🔗 ลิงก์ Web App URL จาก Google Sheets ของคุณ
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzWQRXUAIKG8MaJvD4e-XwAZGcahLkrbc-Gnvn96PLQLOrlX_RBvAgQe8MElrbfbWBs/exec"; 
 
     let html5Qrcode = null;
     let isProcessing = false;
+
+    // ระบบสร้างเสียง Beep โดยไม่ใช้ไฟล์เสียง (เน้นความเร็วในการทำงาน)
+    function playBeep(type) {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            if (type === 'success') {
+                osc.frequency.setValueAtTime(950, ctx.currentTime); // เสียงแหลมสูงชื่นใจ
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.08); // ดังแป๊บเดียวพอ
+            } else {
+                osc.frequency.setValueAtTime(220, ctx.currentTime); // เสียงทุ้มต่ำเตือนความผิดพลาด
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.35); // เสียงยาวกว่าปกติเพื่อเตือน
+            }
+        } catch (e) { console.log("Audio error: " + e); }
+    }
+
+    // ระบบแสดงและควบคุมสถานะ Popup
+    function showPopup(status, title, message) {
+        const modal = document.getElementById('statusModal');
+        const box = document.getElementById('modalBox');
+        const icon = document.getElementById('modalIcon');
+        const t = document.getElementById('modalTitle');
+        const m = document.getElementById('modalMsg');
+
+        box.className = 'modal-box'; 
+        if (status === 'success') {
+            box.classList.add('pop-success');
+            icon.innerText = "🟢";
+            playBeep('success');
+        } else if (status === 'warning') {
+            box.classList.add('pop-warning');
+            icon.innerText = "🟡";
+            playBeep('error');
+        } else {
+            box.classList.add('pop-error');
+            icon.innerText = "🔴";
+            playBeep('error');
+        }
+
+        t.innerText = title;
+        m.innerText = message;
+        modal.style.display = 'flex';
+
+        // ⏱️ ปิดหน้าต่างอัตโนมัติภายใน 1.5 วินาที เพื่อให้พนักงานสแกนต่อได้ทันทีโดยไม่ต้องใช้มือกดปิด
+        setTimeout(() => {
+            modal.style.display = 'none';
+            isProcessing = false; 
+        }, 1500);
+    }
 
     window.onload = function() {
         const savedUser = localStorage.getItem("operator_name");
@@ -69,7 +146,7 @@
 
     function login() {
         const username = document.getElementById("username").value.trim();
-        if (username === "") { alert("กรุณากรอกชื่อพนักงานก่อนเข้าใช้งานครับ"); return; }
+        if (username === "") { alert("กรุณากรอกชื่อพนักงานก่อนครับ"); return; }
         localStorage.setItem("operator_name", username);
         showScanner(username);
     }
@@ -77,9 +154,7 @@
     function logout() {
         if (html5Qrcode && html5Qrcode.isScanning) {
             html5Qrcode.stop().then(() => { proceedLogout(); }).catch(() => { proceedLogout(); });
-        } else {
-            proceedLogout();
-        }
+        } else { proceedLogout(); }
     }
 
     function proceedLogout() {
@@ -94,31 +169,26 @@
         document.getElementById("scanner-section").style.display = "block";
         document.getElementById("display-user").innerText = username;
         
-        // ใช้คลาส Html5Qrcode ตรงๆ เพื่อควบคุมการเปิดกล้องแบบอัตโนมัติ
         if (!html5Qrcode) { html5Qrcode = new Html5Qrcode("reader"); }
         
-        // สั่งเปิดกล้องหลัง (environment) ทันทีโดยไม่ต้องกดปุ่ม
+        // กำหนดโครงสร้างเปิดกล้องเน้นความไว และล็อกสแกนเฉพาะ QR CODE เท่านั้น
         html5Qrcode.start(
             { facingMode: "environment" }, 
-            { fps: 15, qrbox: { width: 280, height: 160 } },
+            { 
+                fps: 25, // เพิ่มเฟรมเรตเพื่อให้จับภาพได้ทันทีไม่หน่วง
+                qrbox: { width: 230, height: 230 },
+                formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ] // 🔥 ล็อกให้รับแค่ QR CODE เท่านั้น
+            },
             onScanSuccess,
-            (errorMessage) => { /* ปล่อยว่างไว้เพื่อซ่อน log error ตอนขยับกล้อง */ }
-        ).then(() => {
-            document.getElementById('result').className = 'waiting';
-            document.getElementById('result').innerText = "📷 กล้องพร้อมทำงาน ส่องที่บาร์โค้ดได้เลย...";
-        }).catch(err => {
-            document.getElementById('result').className = 'error';
-            document.getElementById('result').innerText = "❌ ไม่สามารถเปิดกล้องอัตโนมัติได้ กรุณารีเฟรชหน้าเว็บและอนุญาตให้เข้าถึงกล้อง";
+            (error) => {}
+        ).catch(err => {
+            alert("ไม่สามารถเปิดกล้องได้ กรุณาตรวจสอบการอนุญาตสิทธิ์สิทธิ์กล้องถ่ายรูป");
         });
     }
 
     function onScanSuccess(decodedText, decodedResult) {
         if (isProcessing) return;
-        isProcessing = true;
-
-        const resultDiv = document.getElementById('result');
-        resultDiv.className = 'waiting';
-        resultDiv.innerText = "⏳ กำลังตรวจสอบรหัส: " + decodedText;
+        isProcessing = true; // ล็อกระบบชั่วคราวระหว่างรอผลลัพธ์จาก Sheet
 
         const currentUser = localStorage.getItem("operator_name");
 
@@ -128,21 +198,16 @@
         })
         .then(res => res.json())
         .then(response => {
-            if (response.status === "success") { resultDiv.className = 'success'; } 
-            else if (response.status === "warning") { resultDiv.className = 'warning'; } 
-            else { resultDiv.className = 'error'; }
-            resultDiv.innerText = response.message;
-            
-            setTimeout(() => {
-                isProcessing = false;
-                resultDiv.className = 'waiting';
-                resultDiv.innerText = "📷 พร้อมสแกนชิ้นต่อไป...";
-            }, 2500);
+            if (response.status === "success") {
+                showPopup('success', 'บันทึกสำเร็จ', response.message);
+            } else if (response.status === "warning") {
+                showPopup('warning', 'แจ้งเตือน', response.message);
+            } else {
+                showPopup('error', 'ผิดพลาด', response.message);
+            }
         })
         .catch(err => {
-            resultDiv.className = 'error';
-            resultDiv.innerText = "🔴 การเชื่อมต่อขัดข้อง กรุณาลองใหม่อีกครั้ง";
-            setTimeout(() => { isProcessing = false; }, 2500);
+            showPopup('error', 'เครือข่ายขัดข้อง', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ Google Sheets ได้');
         });
     }
 </script>
