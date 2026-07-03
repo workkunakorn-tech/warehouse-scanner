@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบสแกนคลังสินค้า Ultra Speed (ไม่ต้องรอเน็ต)</title>
+    <title>ระบบคลังสินค้าความเร็วสูง (Log Only)</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; margin: 0; padding: 20px; background-color: #f0f2f5; }
@@ -17,9 +17,11 @@
         .btn-logout { background-color: #dc2626; padding: 6px 12px; font-size: 0.85rem; width: auto; margin-top: 10px; border: none; border-radius: 4px; color: white; cursor: pointer; }
 
         #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 15px; background: #000; min-height: 280px; border: 2px solid #cbd5e1; }
-        .user-info { background-color: #f8fafc; padding: 10px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #2563eb; text-align: left; }
+        .user-info { background-color: #f8fafc; padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #2563eb; text-align: left; font-size: 1rem; }
+        .counter-box { margin-top: 6px; font-weight: bold; color: #1e293b; }
+        .sync-status { font-size: 0.9rem; font-weight: normal; margin-top: 2px; }
 
-        /* Status Popup เน้นแสดงผลและสลายตัวทันที */
+        /* Status Popup ล็อกจอแล้วเคลียร์ไวภายใน 0.4 วินาที */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 9999; justify-content: center; align-items: center; }
         .modal-box { width: 80%; max-width: 360px; padding: 25px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: popupIn 0.08s ease-out; background: #10b981; color: white; }
         .modal-title { font-size: 1.8rem; font-weight: bold; margin: 0; }
@@ -37,7 +39,7 @@
         <h2>🔑 ลงชื่อเข้าใช้งานระบบคลัง</h2>
         <div class="form-group">
             <label for="username">ชื่อพนักงาน / รหัสพนักงาน:</label>
-            <input type="text" id="username" placeholder="กรุณาใส่ชื่อของคุณเพื่อบันทึกงาน...">
+            <input text="text" id="username" placeholder="กรุณาใส่ชื่อของคุณเพื่อบันทึกงาน...">
         </div>
         <button class="btn" onclick="login()">เข้าสู่ระบบเพื่อสแกน</button>
     </div>
@@ -45,8 +47,11 @@
     <div id="scanner-section" style="display: none;">
         <h2>📥 สแกนรับเข้าคลังสินค้า</h2>
         <div class="user-info">
-            <span>👤 ผู้ปฏิบัติงาน: <strong id="display-user"></strong></span>
-            <br>
+            <div>👤 ผู้ปฏิบัติงาน: <strong id="display-user"></strong></div>
+            <div class="counter-box">
+                📊 สแกนรอบนี้: <strong id="scan-count">0</strong> ชิ้น
+                <div id="sync-status" class="sync-status">🟢 บันทึกลง Sheets ครบแล้ว</div>
+            </div>
             <button class="btn btn-logout" onclick="logout()">ออกจากระบบ</button>
         </div>
         <div id="reader"></div>
@@ -55,17 +60,18 @@
 
 <div id="statusModal" class="modal-overlay">
     <div id="modalBox" class="modal-box">
-        <div id="modalTitle" class="modal-title">📥 รับเข้าสำเร็จ</div>
+        <div id="modalTitle" class="modal-title">📥 บันทึกสำเร็จ</div>
     </div>
 </div>
 
 <script>
-    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwt7iaA9IohvJOR8ajOoKfMOR3fuInY4LJVjCAOUW322fIW4ZIWo_YKBcZ6It_lw0gz/exec"; 
+    // 🔗 วางลิงก์ Web App URL จาก Google Sheets ของคุณที่นี่
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzr_XN_29K3Kzy-du90hu9689AWxAeMAj4VSEZm7gLa6Hv67PPe88OZyx2Ecjv6vpws/exec"; 
 
     let html5Qrcode = null;
     let isProcessing = false;
+    let isUploading = false; 
 
-    // ระบบเสียงปี๊บความเร็วสูง
     function playBeep() {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -80,18 +86,31 @@
         } catch (e) { console.log("Audio error"); }
     }
 
-    // แสดงป๊อปอัพความเร็วสูงและเคลียร์ตัวเองใน 0.5 วินาที
     function triggerSuccess() {
         const modal = document.getElementById('statusModal');
         modal.style.display = 'flex';
         playBeep();
 
-        // ⏱️ เพียง 500 มิลลิวินาที ป๊อปอัพจะหายไปและเปิดกล้องรับชิ้นต่อไปทันที
         setTimeout(() => {
             modal.style.display = 'none';
             isProcessing = false; 
-            if (html5Qrcode) { html5Qrcode.resume(); }
-        }, 500);
+            if (html5Qrcode) { html5Qrcode.resume(); } // ปลดล็อกภาพ ให้กล้องสแกนชิ้นต่อไปทันที
+        }, 400); 
+    }
+
+    function updateUI() {
+        const queue = JSON.parse(localStorage.getItem("scan_queue") || "[]");
+        const total = localStorage.getItem("session_total") || "0";
+        document.getElementById("scan-count").innerText = total;
+        
+        const statusEl = document.getElementById("sync-status");
+        if (queue.length > 0) {
+            statusEl.innerText = `⏳ กำลังแอบส่งเข้า Sheets อีก ${queue.length} ชิ้น...`;
+            statusEl.style.color = "#f59e0b";
+        } else {
+            statusEl.innerText = "🟢 บันทึกลง Sheets ครบแล้ว";
+            statusEl.style.color = "#10b981";
+        }
     }
 
     window.onload = function() {
@@ -103,6 +122,7 @@
         const username = document.getElementById("username").value.trim();
         if (username === "") { alert("กรุณากรอกชื่อพนักงานก่อนครับ"); return; }
         localStorage.setItem("operator_name", username);
+        localStorage.setItem("session_total", "0"); 
         showScanner(username);
     }
 
@@ -123,13 +143,14 @@
         document.getElementById("login-section").style.display = "none";
         document.getElementById("scanner-section").style.display = "block";
         document.getElementById("display-user").innerText = username;
+        updateUI();
         
         if (!html5Qrcode) { html5Qrcode = new Html5Qrcode("reader"); }
         
         html5Qrcode.start(
             { facingMode: "environment" }, 
             { 
-                fps: 25, 
+                fps: 30, 
                 qrbox: function(viewfinderWidth, viewfinderHeight) {
                     const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
                     const qrboxSize = Math.floor(minEdge * 0.68);
@@ -148,27 +169,76 @@
         ).catch(err => {
             alert("ไม่สามารถเปิดกล้องได้ กรุณากรอกเปิดสิทธิ์กล้องถ่ายรูป");
         });
+
+        processQueue();
     }
 
     function onScanSuccess(decodedText, decodedResult) {
         if (isProcessing) return;
         isProcessing = true; 
 
-        // 1. ล็อกภาพบนหน้าจอทันทีเมื่อจับเจอ QR Code
+        // 1. ล็อกภาพหน้าจอทันทีเมื่อสแกนโดน QR
         if (html5Qrcode && html5Qrcode.isScanning) {
             html5Qrcode.pause(true); 
         }
 
-        // 2. แสดงหน้าต่างสำเร็จ + ส่งเสียงปี๊บทันที (ไม่ต้องรอเน็ตตอบกลับ)
+        const currentUser = localStorage.getItem("operator_name");
+        
+        // ⏰ แสตมป์เวลา ณ ตอนนี้ (เช่น "3/7/2026, 14:52:00")
+        const currentTimestamp = new Date().toLocaleString('th-TH');
+
+        // 2. จัดโครงสร้างข้อมูลโยนเข้าคิวในเครื่อง [ รหัส, คนสแกน, เวลา ]
+        let queue = JSON.parse(localStorage.getItem("scan_queue") || "[]");
+        queue.push({ 
+            uniqueNo: decodedText, 
+            operator: currentUser, 
+            timestamp: currentTimestamp 
+        });
+        localStorage.setItem("scan_queue", JSON.stringify(queue));
+
+        // 3. ปรับตัวเลขสะสม และสั่งเด้งป๊อปอัพสำเร็จทันทีให้พนักงานทำงานต่อได้เลย
+        let total = parseInt(localStorage.getItem("session_total") || "0") + 1;
+        localStorage.setItem("session_total", total);
+        
+        updateUI();
         triggerSuccess();
 
-        // 3. แอบส่งข้อมูลไปบันทึกใน Google Sheets ด้านหลังบ้านแบบเงียบๆ (Background Fetch)
-        const currentUser = localStorage.getItem("operator_name");
+        // 4. สั่งกระบวนการเบื้องหลังให้ทยอยอัปโหลดข้อมูลเข้า Sheets
+        processQueue();
+    }
+
+    function processQueue() {
+        if (isUploading) return; 
+        
+        let queue = JSON.parse(localStorage.getItem("scan_queue") || "[]");
+        if (queue.length === 0) {
+            isUploading = false;
+            updateUI();
+            return; 
+        }
+
+        isUploading = true;
+        updateUI();
+
+        const itemToSend = queue[0];
+
         fetch(GOOGLE_SCRIPT_URL, {
             method: "POST",
-            body: JSON.stringify({ uniqueNo: decodedText, operator: currentUser })
-        }).catch(err => {
-            console.log("Background upload failed but workflow skipped blocking");
+            body: JSON.stringify(itemToSend)
+        })
+        .then(res => res.json())
+        .then(response => {
+            let currentQueue = JSON.parse(localStorage.getItem("scan_queue") || "[]");
+            currentQueue.shift(); 
+            localStorage.setItem("scan_queue", JSON.stringify(currentQueue));
+            
+            isUploading = false;
+            processQueue(); 
+        })
+        .catch(err => {
+            isUploading = false;
+            updateUI();
+            setTimeout(processQueue, 3000); // หากส่งไม่ผ่าน (เช่นเน็ตหลุด) อีก 3 วินาทีจะลองใหม่เอง
         });
     }
 </script>
