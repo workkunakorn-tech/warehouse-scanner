@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบสแกน QR Code คลังสินค้าความเร็วสูงและแม่นยำ</title>
+    <title>ระบบสแกน QR Code คลังสินค้าความเร็วสูงสไตล์แอป LINE</title>
     <!-- เรียกใช้งานสคริปต์สแกนโค้ด -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
@@ -18,25 +18,23 @@
         .btn:hover { background-color: #1d4ed8; }
         .btn-logout { background-color: #dc2626; padding: 6px 12px; font-size: 0.85rem; width: auto; margin-top: 10px; border: none; border-radius: 4px; color: white; cursor: pointer; }
 
-        /* กรอบกล้องสแกนแบบ High Contrast */
+        /* กรอบกล้องสแกนสี่เหลี่ยมจัตุรัสแบบแอป LINE */
         #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 15px; background: #000; min-height: 280px; border: 2px solid #cbd5e1; }
         .user-info { background-color: #f8fafc; padding: 10px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #2563eb; text-align: left; }
 
-        /* สไตล์ของ Status Popup Modal */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; justify-content: center; align-items: center; }
-        .modal-box { width: 85%; max-width: 400px; padding: 30px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: popupIn 0.15s ease-out; }
+        /* สไตล์ของ Status Popup Modal เน้นจบงานไว */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; }
+        .modal-box { width: 80%; max-width: 360px; padding: 25px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: popupIn 0.1s ease-out; }
         
-        /* สีของแต่ละสถานะ */
-        .pop-success { background: #ffffff; border-top: 10px solid #10b981; }
-        .pop-warning { background: #ffffff; border-top: 10px solid #f59e0b; }
-        .pop-error { background: #ffffff; border-top: 10px solid #ef4444; }
+        /* สีสถานะเด่นๆ มองง่าย ไม่รบกวนสายตา */
+        .pop-success { background: #10b981; color: white; }
+        .pop-warning { background: #f59e0b; color: white; }
+        .pop-error { background: #ef4444; color: white; }
         
-        .modal-icon { font-size: 4rem; margin-bottom: 10px; }
-        .modal-title { font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; color: #1e293b; }
-        .modal-msg { font-size: 1.1rem; color: #475569; margin-bottom: 15px; word-break: break-word; }
+        .modal-title { font-size: 1.8rem; font-weight: bold; margin: 0; }
 
         @keyframes popupIn {
-            0% { transform: scale(0.85); opacity: 0; }
+            0% { transform: scale(0.9); opacity: 0; }
             100% { transform: scale(1); opacity: 1; }
         }
     </style>
@@ -54,9 +52,9 @@
         <button class="btn" onclick="login()">เข้าสู่ระบบเพื่อสแกน</button>
     </div>
 
-    <!-- ส่วนที่ 2: เครื่องสแกน (QR Code Only - High Accuracy) -->
+    <!-- ส่วนที่ 2: เครื่องสแกนสไตล์แอป LINE (QR CODE ONLY) -->
     <div id="scanner-section" style="display: none;">
-        <h2>📥 สแกนรับเข้าคลัง (QR ONLY)</h2>
+        <h2>📥 สแกนรับเข้าคลังสินค้า</h2>
         <div class="user-info">
             <span>👤 ผู้ปฏิบัติงาน: <strong id="display-user"></strong></span>
             <br>
@@ -66,12 +64,10 @@
     </div>
 </div>
 
-<!-- ส่วนที่ 3: หน้าต่าง Popup แสดงสถานะ (Modal) -->
+<!-- ส่วนที่ 3: หน้าต่าง Popup แสดงสถานะแบบสั้นพิเศษ -->
 <div id="statusModal" class="modal-overlay">
     <div id="modalBox" class="modal-box">
-        <div id="modalIcon" class="modal-icon"></div>
         <div id="modalTitle" class="modal-title"></div>
-        <div id="modalMsg" class="modal-msg"></div>
     </div>
 </div>
 
@@ -82,7 +78,7 @@
     let html5Qrcode = null;
     let isProcessing = false;
 
-    // ระบบสร้างเสียง Beep ความเร็วสูง
+    // ระบบเสียงปี๊บความเร็วสูง
     function playBeep(type) {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -92,51 +88,45 @@
             gain.connect(ctx.destination);
 
             if (type === 'success') {
-                osc.frequency.setValueAtTime(1000, ctx.currentTime); // เสียงแหลมกระชับ
-                gain.gain.setValueAtTime(0.12, ctx.currentTime);
+                osc.frequency.setValueAtTime(1050, ctx.currentTime); 
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
                 osc.start();
-                osc.stop(ctx.currentTime + 0.07);
+                osc.stop(ctx.currentTime + 0.06);
             } else {
-                osc.frequency.setValueAtTime(250, ctx.currentTime); // เสียงทุ้มต่ำแจ้งเตือน
+                osc.frequency.setValueAtTime(220, ctx.currentTime); 
                 gain.gain.setValueAtTime(0.2, ctx.currentTime);
                 osc.start();
-                osc.stop(ctx.currentTime + 0.3);
+                osc.stop(ctx.currentTime + 0.25);
             }
-        } catch (e) { console.log("Audio error: " + e); }
+        } catch (e) { console.log("Audio error"); }
     }
 
-    // ระบบควบคุมและเคลียร์ Popup อัตโนมัติ
-    function showPopup(status, title, message) {
+    // ระบบแสดง Popup "รับเข้าสำเร็จ" แบบสั้นกระชับ
+    function showPopup(status, text) {
         const modal = document.getElementById('statusModal');
         const box = document.getElementById('modalBox');
-        const icon = document.getElementById('modalIcon');
         const t = document.getElementById('modalTitle');
-        const m = document.getElementById('modalMsg');
 
         box.className = 'modal-box'; 
         if (status === 'success') {
             box.classList.add('pop-success');
-            icon.innerText = "🟢";
             playBeep('success');
         } else if (status === 'warning') {
             box.classList.add('pop-warning');
-            icon.innerText = "🟡";
             playBeep('error');
         } else {
             box.classList.add('pop-error');
-            icon.innerText = "🔴";
             playBeep('error');
         }
 
-        t.innerText = title;
-        m.innerText = message;
+        t.innerText = text;
         modal.style.display = 'flex';
 
-        // ⏱️ ปิดหน้าต่างอัตโนมัติภายใน 1.2 วินาที (ปรับให้เร็วขึ้นเพื่อความต่อเนื่องในการสแกน)
+        // ⏱️ เคลียร์หน้าต่างไวมากภายใน 0.8 วินาที เพื่อให้ยิงกล่องต่อไปได้ทันที
         setTimeout(() => {
             modal.style.display = 'none';
             isProcessing = false; 
-        }, 1200);
+        }, 800);
     }
 
     window.onload = function() {
@@ -171,40 +161,37 @@
         
         if (!html5Qrcode) { html5Qrcode = new Html5Qrcode("reader"); }
         
-        // 🚀 ตั้งค่า Configuration ขั้นสูงเพื่อเน้น "จับไว + ชัวร์แม่นยำ" 
         html5Qrcode.start(
             { facingMode: "environment" }, 
             { 
-                fps: 20, // ความถี่เฟรมระดับเหมาะสม ภาพไม่สั่นไหวและไม่หน่วง
+                fps: 25, // เร่งการดึงภาพสูงสุดเพื่อความลื่นไหล
                 qrbox: function(viewfinderWidth, viewfinderHeight) {
-                    // คำนวณขนาดกล่องสแกนสีเหลี่ยมจัตุรัสให้สัมพันธ์กับเลนส์กล้องมือถือ เพื่อประสิทธิภาพการโฟกัสสูงสุด
+                    // 📐 กลับมาเป็นสี่เหลี่ยมจัตุรัสแบบแอป LINE โฟกัสแม่นยำที่สุดสำหรับ QR Code
                     const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                    const qrboxSize = Math.floor(minEdge * 0.65);
+                    const qrboxSize = Math.floor(minEdge * 0.68);
                     return { width: qrboxSize, height: qrboxSize };
                 },
-                formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ], // บังคับอ่านแค่ QR CODE เท่านั้น
-                
-                // 🔥 ส่วนสำคัญ: บังคับเปิดกล้องความละเอียดสูง เพื่อความชัวร์ในการอ่านเส้น QR Code ขนาดเล็ก
+                // 🔒 ล็อกเป้าหมายให้รับและประมวลผลแค่ QR CODE อย่างเดียวตามบรีฟ
+                formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
                 videoConstraints: {
                     facingMode: "environment",
-                    width: { min: 640, ideal: 1280, max: 1920 },
-                    height: { min: 480, ideal: 720, max: 1080 }
+                    width: { min: 640, ideal: 1280 },
+                    height: { min: 480, ideal: 720 }
                 },
-                // ⚡ เรียกใช้งานชิปถอดรหัสระดับฮาร์ดแวร์บนมือถือโดยตรง (เร็วและแม่นยำที่สุด)
                 experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true
+                    useBarCodeDetectorIfSupported: true // ใช้ฮาร์ดแวร์ในมือถือช่วยให้อ่านไวขึ้นแบบแอป LINE
                 }
             },
             onScanSuccess,
             (error) => {}
         ).catch(err => {
-            alert("ไม่สามารถเปิดกล้องได้ กรุณาตรวจสอบการอนุญาตสิทธิ์กล้องถ่ายรูป");
+            alert("ไม่สามารถเปิดกล้องได้ กรุณากรอกเปิดสิทธิ์กล้องถ่ายรูป");
         });
     }
 
     function onScanSuccess(decodedText, decodedResult) {
         if (isProcessing) return;
-        isProcessing = true; // ล็อกระบบทันทีเพื่อรอข้อมูลจาก Sheets เพื่อความชัวร์และไม่สแกนซ้ำซ้อน
+        isProcessing = true; // ล็อกจังหวะการสแกนซ้ำซ้อน
 
         const currentUser = localStorage.getItem("operator_name");
 
@@ -215,15 +202,15 @@
         .then(res => res.json())
         .then(response => {
             if (response.status === "success") {
-                showPopup('success', 'บันทึกสำเร็จ', response.message);
+                showPopup('success', '📥 รับเข้าสำเร็จ'); // แสดงเฉพาะข้อความสั้นๆ ตามต้องการ
             } else if (response.status === "warning") {
-                showPopup('warning', 'แจ้งเตือน', response.message);
+                showPopup('warning', '⚠️ ข้อมูลซ้ำ/มีปัญหา');
             } else {
-                showPopup('error', 'ผิดพลาด', response.message);
+                showPopup('error', '❌ ไม่สำเร็จ');
             }
         })
         .catch(err => {
-            showPopup('error', 'เครือข่ายขัดข้อง', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ Google Sheets ได้');
+            showPopup('error', '🔌 เน็ตหลุด');
         });
     }
 </script>
