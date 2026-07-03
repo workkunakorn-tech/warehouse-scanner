@@ -55,7 +55,7 @@
 
 <script>
     // 🔗 นำ Web App URL ที่ได้จาก Google Apps Script มาวางที่นี่
-    const GOOGLE_SCRIPT_URL = "วาง_URL_WEB_APP_ของ_คุณ_ที่นี่"; 
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwPEBhNaOzpTjxJsYS9czDAucjva7FomtJTNwBJCZy_6qju1t2LvjYHWxhjL7TavquI/exec"; 
 
     let html5QrcodeScanner = null;
     let isProcessing = false;
